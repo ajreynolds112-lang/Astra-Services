@@ -6,6 +6,11 @@ import { StripeSync } from 'stripe-replit-sync';
  * Not cached -- tokens can rotate, so fetch fresh each time.
  */
 async function getStripeCredentials(): Promise<{ secretKey: string; webhookSecret?: string }> {
+  if (process.env.ASTRA_STANDALONE === "true") {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!/^(sk|rk)_(test|live)_/.test(secretKey ?? "")) throw new Error("Standalone scripts require STRIPE_SECRET_KEY.");
+    return { secretKey: secretKey!, webhookSecret: process.env.STRIPE_WEBHOOK_SECRET };
+  }
   if (process.env.ASTRA_LOCAL_DEV === "true") {
     const secretKey = process.env.STRIPE_SECRET_KEY;
     if (!secretKey?.startsWith("sk_test_")) throw new Error("Local scripts require a Stripe sandbox sk_test_ key.");

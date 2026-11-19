@@ -1,4 +1,4 @@
-import { ReplitConnectors } from "@replit/connectors-sdk";
+import { githubApi } from "./localDevelopment";
 import type { AppRecord } from "./appRegistry";
 import { githubRepository } from "./appAccess";
 import { configureExpoDirectory } from "./expoProvider";
@@ -24,7 +24,6 @@ export const TESTFLIGHT_YAML = [
   "",
 ].join("\n");
 
-const connectors = new ReplitConnectors();
 const repositoryMetadata = z.object({ default_branch: z.string().min(1) });
 const sourceFile = z.object({ content: z.string().max(2_000_000), sha: z.string().min(1) });
 const profileSchema = z.object({ ios: z.record(z.string(), z.unknown()).optional() }).passthrough();
@@ -34,7 +33,7 @@ const easSchema = z.object({
 }).passthrough();
 
 async function github(path: string, method = "GET", body?: object) {
-  const response = await connectors.proxy("github", path, {
+  const response = await githubApi(path, {
     method,
     ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
   });
@@ -81,7 +80,7 @@ export async function configureTestFlight(app: AppRecord): Promise<{ branch: str
     sha: current.sha, branch,
   });
   const workflowPath = `${prefix}.eas/workflows/${TESTFLIGHT_WORKFLOW}`;
-  const priorResponse = await connectors.proxy("github", `${base}/contents/${workflowPath}?ref=${encodeURIComponent(branch)}`, { method: "GET" });
+  const priorResponse = await githubApi(`${base}/contents/${workflowPath}?ref=${encodeURIComponent(branch)}`, { method: "GET" });
   let sha: string | undefined;
   if (priorResponse.ok) sha = sourceFile.parse(await priorResponse.json()).sha;
   else if (priorResponse.status !== 404) throw new Error("Could not check the existing TestFlight workflow.");

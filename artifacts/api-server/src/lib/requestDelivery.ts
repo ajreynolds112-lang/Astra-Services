@@ -1,4 +1,4 @@
-import { ReplitConnectors } from "@replit/connectors-sdk";
+import { githubApi } from "./localDevelopment";
 
 export const REQUESTS_REPO = "ajreynolds112-lang/CYBAZONE-Official-App";
 export const REQUESTS_FOLDER = "Requests";
@@ -15,17 +15,7 @@ export async function commitRequestFile(fileName: string, content: string, commi
       content: Buffer.from(content, "utf8").toString("base64"),
     }),
   };
-  let res: Response;
-  if (process.env.ASTRA_LOCAL_DEV === "true") {
-    const token = process.env.GITHUB_TOKEN;
-    if (!token) throw new Error("GITHUB_TOKEN is required for local delivery to the private requests repository.");
-    res = await fetch(`https://api.github.com${path}`, {
-      ...options, signal: AbortSignal.timeout(10000),
-      headers: { ...options.headers, Authorization: `Bearer ${token}` },
-    });
-  } else {
-    res = await new ReplitConnectors().proxy("github", path, options);
-  }
+  const res = await githubApi(path, options);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`GitHub commit failed (${res.status}): ${text.slice(0, 300)}`);

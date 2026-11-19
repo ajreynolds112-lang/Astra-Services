@@ -35,12 +35,18 @@ async function initStripe(): Promise<void> {
 
   const stripe = await getUncachableStripeClient();
   const runtimeDomain = process.env["REPLIT_DOMAINS"]?.split(",")[0]?.trim();
+  // Standalone only manages a webhook when its URL is set explicitly, so staging never claims the live endpoint.
+  const webhookUrl = process.env.ASTRA_STANDALONE === "true"
+    ? process.env.STRIPE_WEBHOOK_URL?.trim()
+    : runtimeDomain && `https://${runtimeDomain}/api/stripe/webhook`;
   if (process.env.ASTRA_LOCAL_DEV === "true") {
     logger.info("Local Stripe sandbox mode; use Stripe CLI forwarding for webhook tests");
+  } else if (process.env.ASTRA_STANDALONE === "true" && !webhookUrl) {
+    logger.info("Standalone mode without STRIPE_WEBHOOK_URL; webhooks verify with STRIPE_WEBHOOK_SECRET");
   } else {
-    if (!runtimeDomain) throw new Error("REPLIT_DOMAINS is required for Stripe webhook configuration");
+    if (!webhookUrl) throw new Error("REPLIT_DOMAINS is required for Stripe webhook configuration");
     const webhook = await configureStripeWebhooks({
-      url: `https://${runtimeDomain}/api/stripe/webhook`,
+      url: webhookUrl,
       allowDevelopmentWebhooks: process.env.ASTRA_ENABLE_DEV_STRIPE_WEBHOOKS === "true",
       webhooks: stripe.webhookEndpoints,
       sync: stripeSync,
@@ -88,7 +94,8 @@ if (!PAYMENTS_ENABLED) {
   );
 }
 
-app.listen(port, (err) => {
+// HOST=127.0.0.1 keeps the self-hosted server reachable only through the tunnel.
+app.listen(port, process.env.HOST || "0.0.0.0", (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);

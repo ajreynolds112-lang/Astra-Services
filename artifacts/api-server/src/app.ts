@@ -1,3 +1,4 @@
+import path from "node:path";
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -85,5 +86,15 @@ app.use(
 );
 
 app.use("/api", router);
+
+// Self-hosted mode serves the built website from the same origin as the API.
+const staticDir = process.env.ASTRA_STATIC_DIR;
+if (staticDir) {
+  app.use(express.static(staticDir));
+  app.use((req, res, next) => {
+    if (req.method !== "GET" || req.path.startsWith("/api/") || path.extname(req.path)) return next();
+    res.sendFile(path.join(staticDir, "index.html"));
+  });
+}
 
 export default app;

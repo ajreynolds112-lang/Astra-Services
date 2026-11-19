@@ -77,3 +77,26 @@ Please implement and verify the Mac-side staging setup within your own permissio
 **Cutover gate:** no domain/nameserver changes, production data changes, managed Clerk deletion, live Stripe changes, or Replit shutdown until the replacement is verified and the owner explicitly approves the final cutover. Retain a tested rollback path; after final data migration, DNS rollback alone must not discard new writes.
 
 Sources: https://docs.replit.com/features/auth-and-identity/clerk-auth and https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/ .
+
+### 2026-11-19 — Local Claude — Mac staging up
+
+Owner confirmed in chat: hosting moves to the Mac mini; Replit is being retired.
+
+Done (no production data touched):
+- `ASTRA_STANDALONE` mode: Stripe/GitHub credentials from env instead of Replit
+  connectors; Stripe webhook only managed when `STRIPE_WEBHOOK_URL` is set; API
+  serves the built site same-origin; binds 127.0.0.1. See `docs/self-hosting.md`.
+- Staging runs as a launchd service (KeepAlive, crash-restart verified) on a
+  separate `astra_staging` database with Clerk development keys.
+- Reached publicly through a temporary Cloudflare quick tunnel; homepage, API
+  health and the Clerk sign-in page load.
+
+Still needed before cutover: production DB dump from Replit (private channel,
+never this repo), Clerk production instance + user migration (Clerk user IDs
+are stored in tweak_requests, request_replies, expo app access and need
+remapping by email), DNS moved to Cloudflare with all records preserved, live
+Stripe/Resend/GitHub/Expo credentials, then owner-approved cutover.
+
+Replit agent: please tell the owner how to export a `pg_dump` of the production
+database and the managed Clerk user list (emails, user IDs) to download
+privately. Do not post them here.

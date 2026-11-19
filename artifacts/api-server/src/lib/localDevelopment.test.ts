@@ -14,3 +14,11 @@ test("local mode never silently uses managed credentials or live keys", () => {
     assert.throws(() => localStripeCredentials({ ASTRA_LOCAL_DEV: "true", STRIPE_SECRET_KEY: key }), /sandbox/);
   }
 });
+test("standalone mode accepts live or sandbox keys from env and rejects missing ones", () => {
+  for (const key of ["sk_live_fixture", "sk_test_fixture", "rk_live_fixture"]) {
+    assert.equal(localStripeCredentials({ ASTRA_STANDALONE: "true", STRIPE_SECRET_KEY: key })?.secretKey, key);
+  }
+  for (const key of [undefined, "", "pk_live_fixture"]) {
+    assert.throws(() => localStripeCredentials({ ASTRA_STANDALONE: "true", STRIPE_SECRET_KEY: key }), /STRIPE_SECRET_KEY/);
+  }
+});

@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "license": "MIT",
   "packageManager": "pnpm@10.26.1",
-  "engines": { "node": ">=22.16" },
+  "engines": {
+    "node": ">=22.16"
+  },
   "scripts": {
     "dev": "node scripts/local.mjs dev",
     "db:push": "node scripts/local.mjs db",
@@ -11,7 +13,13 @@
     "preinstall": "node scripts/preinstall.mjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "prod:build": "node scripts/production.mjs build",
+    "prod:db": "node scripts/production.mjs db",
+    "prod:start": "node scripts/production.mjs start",
+    "site:on": "scripts/site.sh on",
+    "site:off": "scripts/site.sh off",
+    "site:status": "scripts/site.sh status"
   },
   "private": true,
   "dependencies": {
