@@ -1,0 +1,1267 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: studio
+    description: Studio info
+  - name: plans
+    description: Payment plans
+  - name: checkout
+    description: Stripe checkout
+  - name: inquiries
+    description: Contact inquiries
+  - name: portal
+    description: Signed-in client portal
+  - name: dev
+    description: Owner-only dev access management
+paths:
+  /admin/requests:
+    get:
+      operationId: listAdminRequests
+      tags: [dev]
+      summary: Owner and Dev request inbox with saved replies
+      responses:
+        "200":
+          description: Latest 100 requests and email configuration status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestInbox"
+        "401":
+          description: Sign-in required
+        "403":
+          description: Admin access required
+  /admin/requests/{id}/replies:
+    post:
+      operationId: replyToRequest
+      tags: [dev]
+      summary: Save an admin reply and email the original requester
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestReplyInput"
+      responses:
+        "201":
+          description: Reply saved; check emailStatus for delivery acceptance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestReply"
+        "400":
+          description: Invalid reply
+        "401":
+          description: Sign-in required
+        "403":
+          description: Admin access required
+        "404":
+          description: Request not found
+        "409":
+          description: Request is not ready for replies
+  /admin/request-replies/{id}/retry-email:
+    post:
+      operationId: retryRequestReplyEmail
+      tags: [dev]
+      summary: Retry email delivery without creating another reply
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Saved reply with updated delivery status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestReply"
+        "401":
+          description: Sign-in required
+        "403":
+          description: Admin access required
+        "404":
+          description: Reply not found
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /studio:
+    get:
+      operationId: getStudio
+      tags: [studio]
+      summary: Public studio contact info and payment availability
+      responses:
+        "200":
+          description: Studio info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudioInfo"
+  /plans:
+    get:
+      operationId: listPlans
+      tags: [plans]
+      summary: List active payment plans (from Stripe)
+      responses:
+        "200":
+          description: Plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentPlan"
+  /checkout:
+    post:
+      operationId: createCheckout
+      tags: [checkout]
+      summary: Start a Stripe checkout session for a payment plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutInput"
+      responses:
+        "200":
+          description: Checkout session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutSession"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Payments not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /checkout/{sessionId}:
+    get:
+      operationId: getCheckoutSummary
+      tags: [checkout]
+      summary: Confirm a completed checkout and summarize it
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutSummary"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /inquiries:
+    post:
+      operationId: createInquiry
+      tags: [inquiries]
+      summary: Submit a project inquiry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InquiryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inquiry"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /portal/me:
+    get:
+      operationId: getPortalMe
+      tags: [portal]
+      summary: Signed-in client profile and subscription status
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalMe"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /portal/billing:
+    get:
+      operationId: getPortalBilling
+      tags: [portal]
+      summary: Own subscription cancellation status and unpaid invoices
+      responses:
+        "200":
+          description: Live billing status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PortalBilling" }
+        "401": { description: Not signed in }
+        "403": { description: Verified email required }
+        "503": { description: Payments unavailable }
+  /portal/hosting/cancel:
+    post:
+      operationId: cancelPortalHosting
+      tags: [portal]
+      summary: Cancel own hosting at period end without forgiving design installments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostingCancellationInput" }
+      responses:
+        "200":
+          description: Hosting cancellation scheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingSubscription" }
+        "400": { description: Confirmation required }
+        "401": { description: Not signed in }
+        "404": { description: Subscription not owned by this client }
+        "409": { description: Subscription cannot be cancelled }
+  /tweak-requests:
+    post:
+      operationId: createTweakRequest
+      tags: [portal]
+      summary: Submit an App Tweaks Request (clients only). Returns a checkout URL when the $20 fee applies.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TweakRequestInput"
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TweakRequestResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: No active subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Could not save the request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /tweak-requests/confirm:
+    post:
+      operationId: confirmTweakRequest
+      tags: [portal]
+      summary: Deliver a request after its fee was paid (idempotent)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmTweakRequestInput"
+      responses:
+        "200":
+          description: Delivered (or still awaiting payment)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TweakRequestResult"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Could not save the request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /dev/purchase-users:
+    get:
+      operationId: listPurchaseUsers
+      tags: [dev]
+      summary: Browse all registered users or Stripe checkout customers (owner only)
+      parameters:
+        - { in: query, name: source, schema: { type: string, enum: [customers, registered], default: customers } }
+        - { in: query, name: cursor, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: offset, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: Paginated user directory
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseUserPage" }
+        "401": { description: Not signed in }
+        "403": { description: Owner only }
+  /dev/purchase-history:
+    get:
+      operationId: getPurchaseHistory
+      tags: [dev]
+      summary: Browse a user's payments and zero-cost purchases (owner only)
+      parameters:
+        - { in: query, name: source, required: true, schema: { type: string, enum: [customers, registered] } }
+        - { in: query, name: id, required: true, schema: { type: string, minLength: 1, maxLength: 100 } }
+        - { in: query, name: customerId, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: paymentCursor, schema: { type: string, maxLength: 100 } }
+        - { in: query, name: orderCursor, schema: { type: string, maxLength: 100 } }
+      responses:
+        "200":
+          description: Live Stripe purchase history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseHistory" }
+        "401": { description: Not signed in }
+        "403": { description: Owner only }
+        "404": { description: User or customer not found }
+  /dev/refunds:
+    post:
+      operationId: issuePurchaseRefund
+      tags: [dev]
+      summary: Issue a confirmed full or partial refund (owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PurchaseRefundInput" }
+      responses:
+        "201":
+          description: Refund submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseRefund" }
+        "400": { description: Invalid or unconfirmed refund }
+        "401": { description: Not signed in }
+        "403": { description: Owner only }
+        "409": { description: Payment cannot be refunded for that amount }
+  /dev/promotions:
+    get:
+      operationId: listPromotions
+      tags: [dev]
+      summary: List promo codes and eligible purchases (owner only)
+      responses:
+        "200":
+          description: Promotion catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionCatalog"
+        "401":
+          description: Not signed in
+        "403":
+          description: Owner only
+    post:
+      operationId: createPromotion
+      tags: [dev]
+      summary: Create a Stripe promo code (owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionInput"
+      responses:
+        "201":
+          description: Promo code created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Promotion"
+        "400":
+          description: Invalid promotion
+        "401":
+          description: Not signed in
+        "403":
+          description: Owner only
+        "409":
+          description: Code already exists
+  /dev/users:
+    get:
+      operationId: listDevUsers
+      tags: [dev]
+      summary: List emails with dev access (owner only)
+      responses:
+        "200":
+          description: Dev users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DevUser"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Owner only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: addDevUser
+      tags: [dev]
+      summary: Grant dev access to an email (owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DevUserInput"
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DevUser"
+        "400":
+          description: Invalid email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Owner only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Already has dev access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /dev/users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+    patch:
+      operationId: updateDevUser
+      tags: [dev]
+      summary: Turn update emails on or off for a dev (owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DevUserUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DevUser"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Owner only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: removeDevUser
+      tags: [dev]
+      summary: Remove dev access (owner only)
+      responses:
+        "204":
+          description: Removed
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Owner only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /dev/test-request:
+    post:
+      operationId: sendTestTweakRequest
+      tags: [dev]
+      summary: Send a test App Tweaks Request through the full delivery flow (owner only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TweakRequestInput"
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TweakRequestResult"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Owner only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Could not save the request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /apps:
+    get:
+      operationId: getClientApps
+      tags: [Apps]
+      summary: Assigned apps for clients; all registered Expo apps for Dev users
+      responses:
+        "200":
+          description: Accessible apps
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppsResponse" }
+  /apps/sync:
+    post:
+      operationId: syncExpoApps
+      tags: [Apps]
+      summary: Dev-only refresh of all accessible Expo account projects
+      responses:
+        "200":
+          description: Refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count: { type: integer }
+  /apps/users/search:
+    get:
+      operationId: searchAppUsers
+      tags: [Apps]
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 80 }
+      responses:
+        "200":
+          description: Registered accounts, visible only to Dev users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AppUser" }
+  /apps/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getClientApp
+      tags: [Apps]
+      responses:
+        "200":
+          description: An app the signed-in user is allowed to view
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppDetails" }
+    patch:
+      operationId: updateClientApp
+      tags: [Apps]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AppUpdate" }
+      responses:
+        "200":
+          description: Updated by a Dev user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClientApp" }
+  /apps/{id}/assignments:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      operationId: assignAppUser
+      tags: [Apps]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AppAssignmentInput" }
+      responses:
+        "200":
+          description: Account assigned, idempotently
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppUser" }
+  /apps/{id}/assignments/{userId}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+      - in: path
+        name: userId
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: unassignAppUser
+      tags: [Apps]
+      responses:
+        "204": { description: Access removed }
+  /apps/{id}/assignments/{userId}/email:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+      - in: path
+        name: userId
+        required: true
+        schema: { type: string }
+    post:
+      operationId: emailAppInstructions
+      tags: [Apps]
+      summary: Dev-only send or retry native app onboarding for an assigned account
+      responses:
+        "200":
+          description: Assignment and explicit email delivery result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppUser" }
+  /apps/{id}/automation:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: configureAppAutomation
+      tags: [Apps]
+      summary: Dev-only install of a TestFlight EAS workflow in this app's source repository
+      responses:
+        "200":
+          description: Configured
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppActionResult" }
+  /apps/{id}/build:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: requestAppBuild
+      tags: [Apps]
+      summary: Dev-only remotely build iOS and submit to TestFlight; may consume EAS credits
+      responses:
+        "202":
+          description: Actual EAS workflow requested, not yet Apple-approved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppActionResult" }
+components:
+  schemas:
+    AppAssignmentInput:
+      type: object
+      description: Provide exactly one of email (registration not required) or userId (existing account).
+      properties:
+        userId: { type: string, minLength: 1 }
+        email: { type: string, format: email, maxLength: 254 }
+    ClientApp:
+      type: object
+      required: [id, name, slug, owner, expoUrl, siteUrl, previewUrl, testflightUrl, repositoryUrl, appDirectory, ascAppId, automationConfigured, assignedToMe, buildRequestUrl, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        owner: { type: string }
+        expoUrl: { type: string }
+        siteUrl: { type: string, nullable: true }
+        previewUrl: { type: string, nullable: true }
+        testflightUrl: { type: string, nullable: true }
+        repositoryUrl: { type: string, nullable: true }
+        appDirectory: { type: string }
+        ascAppId: { type: string, nullable: true }
+        automationConfigured: { type: boolean }
+        assignedToMe: { type: boolean }
+        buildRequestUrl: { type: string, nullable: true }
+        updatedAt: { type: string }
+    AppUser:
+      description: Registered account or email assignment, optionally with onboarding email result. IDs starting email_ identify email assignments.
+      type: object
+      required: [id, name, email]
+      properties:
+        emailDelivery: { type: string, enum: [sent, failed, not_sent] }
+        emailMessage: { type: string }
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+    AppUpdate:
+      type: object
+      properties:
+        siteUrl: { type: string, nullable: true }
+        previewUrl: { type: string, nullable: true }
+        testflightUrl: { type: string, nullable: true }
+        repositoryUrl: { type: string, nullable: true }
+        appDirectory: { type: string }
+        ascAppId: { type: string, nullable: true }
+    AppsResponse:
+      type: object
+      required: [apps, expoConnected, lastSyncedAt, syncError]
+      properties:
+        apps:
+          type: array
+          items: { $ref: "#/components/schemas/ClientApp" }
+        expoConnected: { type: boolean }
+        lastSyncedAt: { type: string, nullable: true }
+        syncError: { type: string, nullable: true }
+    AppBuild:
+      type: object
+      required: [id, status, platform, createdAt, version, buildNumber, url, artifactUrl]
+      properties:
+        id: { type: string }
+        status: { type: string }
+        platform: { type: string }
+        createdAt: { type: string }
+        version: { type: string, nullable: true }
+        buildNumber: { type: string, nullable: true }
+        url: { type: string }
+        artifactUrl: { type: string, nullable: true }
+    AppDetails:
+      type: object
+      required: [app, assignedUsers, builds, buildError]
+      properties:
+        app: { $ref: "#/components/schemas/ClientApp" }
+        assignedUsers:
+          type: array
+          items: { $ref: "#/components/schemas/AppUser" }
+        builds:
+          type: array
+          items: { $ref: "#/components/schemas/AppBuild" }
+        buildError: { type: string, nullable: true }
+    AppActionResult:
+      type: object
+      required: [message, url]
+      properties:
+        message: { type: string }
+        url: { type: string, nullable: true }
+    HostingCancellationInput:
+      type: object
+      required: [subscriptionId, confirmed]
+      properties:
+        subscriptionId: { type: string, pattern: "^sub_[A-Za-z0-9]+$", maxLength: 100 }
+        confirmed: { type: boolean }
+    BillingSubscription:
+      type: object
+      required: [id, name, status, amount, currency, interval, hostingIncluded, designPaymentsContinue, hostingEndsAt, cancellationRequested, canCancelHosting]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { type: string }
+        amount: { type: integer }
+        currency: { type: string }
+        interval: { type: string }
+        hostingIncluded: { type: boolean }
+        designPaymentsContinue: { type: boolean }
+        hostingEndsAt: { type: ["string", "null"] }
+        cancellationRequested: { type: boolean }
+        canCancelHosting: { type: boolean }
+    BillingInvoice:
+      type: object
+      required: [id, amount, currency, paymentUrl, designRelated, overdue]
+      properties:
+        id: { type: string }
+        amount: { type: integer }
+        currency: { type: string }
+        paymentUrl: { type: ["string", "null"] }
+        designRelated: { type: boolean }
+        overdue: { type: boolean }
+    PortalBilling:
+      type: object
+      required: [subscriptions, invoices, designPaymentRisk]
+      properties:
+        subscriptions:
+          type: array
+          items: { $ref: "#/components/schemas/BillingSubscription" }
+        invoices:
+          type: array
+          items: { $ref: "#/components/schemas/BillingInvoice" }
+        designPaymentRisk: { type: boolean }
+    PortalMe:
+      type: object
+      required: [name, email, subscribed, plans, isOwner, isDev, requestFee, freeRequestsPerMonth, freeRequestsRemaining]
+      properties:
+        emailVerified: { type: boolean }
+        name: { type: string }
+        email: { type: string }
+        isOwner:
+          type: boolean
+          description: True for the studio owner account (can manage dev access)
+        isDev:
+          type: boolean
+          description: True when the owner granted this email dev access
+        requestFee:
+          type: integer
+          description: Fee in cents for one app tweak request beyond the free allowance
+        freeRequestsPerMonth:
+          type: integer
+        freeRequestsRemaining:
+          type: integer
+          description: Free requests left this calendar month (UTC)
+        subscribed:
+          type: boolean
+          description: True when the email has an active or trialing Stripe subscription
+        plans:
+          type: array
+          items: { type: string }
+    DevUser:
+      type: object
+      required: [id, email, receiveUpdates, createdAt]
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        receiveUpdates: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    RequestInbox:
+      type: object
+      required: [requests, emailConfigured, emailConfigurationMessage]
+      properties:
+        requests:
+          type: array
+          items: { $ref: "#/components/schemas/AdminTweakRequest" }
+        emailConfigured: { type: boolean }
+        emailConfigurationMessage: { type: ["string", "null"] }
+    AdminTweakRequest:
+      type: object
+      required: [id, name, email, status, createdAt, fileName, payload, replies]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+        fileName: { type: ["string", "null"] }
+        payload: { $ref: "#/components/schemas/TweakRequestInput" }
+        replies:
+          type: array
+          items: { $ref: "#/components/schemas/RequestReply" }
+    RequestReplyInput:
+      type: object
+      additionalProperties: false
+      required: [message, clientKey]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 10000 }
+        clientKey: { type: string, format: uuid }
+    RequestReply:
+      type: object
+      required: [id, requestId, authorName, message, emailStatus, emailError, createdAt, sentAt]
+      properties:
+        id: { type: integer }
+        requestId: { type: integer }
+        authorName: { type: string }
+        message: { type: string }
+        emailStatus: { type: string, enum: [pending, sending, sent, failed] }
+        emailError: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        sentAt: { type: ["string", "null"], format: date-time }
+    DevUserInput:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        receiveUpdates: { type: boolean }
+    DevUserUpdate:
+      type: object
+      required: [receiveUpdates]
+      properties:
+        receiveUpdates: { type: boolean }
+    TweakRequestInput:
+      type: object
+      required: [appName, title, currentBehavior, desiredBehavior, location, userFlow, acceptanceCriteria, priority]
+      properties:
+        appName: { type: string, minLength: 2, maxLength: 120 }
+        title: { type: string, minLength: 5, maxLength: 140 }
+        currentBehavior: { type: string, minLength: 40, maxLength: 5000 }
+        desiredBehavior: { type: string, minLength: 80, maxLength: 8000 }
+        location: { type: string, minLength: 10, maxLength: 3000 }
+        userFlow: { type: string, minLength: 40, maxLength: 8000 }
+        acceptanceCriteria: { type: string, minLength: 30, maxLength: 5000 }
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        notes: { type: string, maxLength: 5000 }
+    TweakRequestResult:
+      type: object
+      required: [status, fileName, emailed, checkoutUrl]
+      properties:
+        status:
+          type: string
+          enum: [delivered, payment_required]
+        fileName: { type: ["string", "null"] }
+        emailed:
+          type: boolean
+          description: Whether the notification email was sent
+        checkoutUrl:
+          type: ["string", "null"]
+          description: Stripe Checkout URL to pay the request fee when status is payment_required
+    ConfirmTweakRequestInput:
+      type: object
+      required: [sessionId]
+      properties:
+        sessionId: { type: string, minLength: 1 }
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    StudioInfo:
+      type: object
+      required: [name, email, location, paymentsEnabled]
+      properties:
+        name: { type: string }
+        email: { type: string }
+        location: { type: string }
+        paymentsEnabled:
+          type: boolean
+          description: True when Stripe is connected and at least one plan exists
+    PaymentPlan:
+      type: object
+      required: [priceId, productId, name, description, service, installmentAmount, currency, interval, installments, totalAmount, features, featured, payInFull, afterAmount, freeRequestsPerMonth]
+      properties:
+        priceId: { type: string }
+        productId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        service:
+          type: string
+          enum: [design, hosting, bundle]
+        installmentAmount:
+          type: integer
+          description: Amount per payment in cents
+        currency: { type: string }
+        interval:
+          type: string
+          enum: [month, week, year]
+        installments:
+          type: ["integer", "null"]
+          description: Number of payments; null means ongoing until cancelled (e.g. hosting)
+        totalAmount:
+          type: ["integer", "null"]
+          description: Total in cents when installments is set
+        features:
+          type: array
+          items: { type: string }
+        featured: { type: boolean }
+        payInFull:
+          description: One-time discounted price for paying the whole plan upfront; null when not offered
+          oneOf:
+            - $ref: "#/components/schemas/PayInFullOption"
+            - type: "null"
+        afterAmount:
+          type: ["integer", "null"]
+          description: Recurring amount in cents (same interval) that starts after the plan term ends; null if the plan simply ends
+        freeRequestsPerMonth:
+          type: integer
+          description: Free app tweak requests included per calendar month
+    PayInFullOption:
+      type: object
+      required: [priceId, amount, savings]
+      properties:
+        priceId: { type: string }
+        amount: { type: integer, description: One-time amount in cents }
+        savings: { type: integer, description: Cents saved versus paying in installments }
+    PurchaseUser:
+      type: object
+      required: [id, source, name, email, createdAt]
+      properties:
+        id: { type: string }
+        source: { type: string, enum: [customers, registered] }
+        name: { type: string }
+        email: { type: string, nullable: true }
+        createdAt: { type: string }
+    PurchaseUserPage:
+      type: object
+      required: [users, hasMore, nextCursor, nextOffset]
+      properties:
+        users: { type: array, items: { $ref: "#/components/schemas/PurchaseUser" } }
+        hasMore: { type: boolean }
+        nextCursor: { type: string, nullable: true }
+        nextOffset: { type: integer, nullable: true }
+    PurchaseRefundInput:
+      type: object
+      required: [chargeId, customerId, amount, confirmed, requestId]
+      properties:
+        chargeId: { type: string, pattern: "^ch_[A-Za-z0-9]+$" }
+        customerId: { type: string, pattern: "^cus_[A-Za-z0-9]+$" }
+        amount: { type: integer, minimum: 1, maximum: 99999999, description: Refund amount in the currency's smallest unit. }
+        confirmed: { type: boolean, description: Must be true after the owner confirms the refund. }
+        requestId: { type: string, format: uuid, description: Stable idempotency identifier for this confirmation. }
+        reason: { type: string, enum: [requested_by_customer, duplicate, fraudulent] }
+    PurchaseRefund:
+      type: object
+      required: [id, chargeId, amount, currency, status, createdAt]
+      properties:
+        id: { type: string }
+        chargeId: { type: string }
+        amount: { type: integer }
+        currency: { type: string }
+        status: { type: string }
+        createdAt: { type: string }
+    PurchaseTransaction:
+      type: object
+      required: [id, customerId, description, amount, refundedAmount, refundableAmount, currency, status, createdAt, receiptUrl, refunds]
+      properties:
+        id: { type: string }
+        customerId: { type: string, nullable: true }
+        description: { type: string }
+        amount: { type: integer }
+        refundedAmount: { type: integer }
+        refundableAmount: { type: integer }
+        currency: { type: string }
+        status: { type: string }
+        createdAt: { type: string }
+        receiptUrl: { type: string, nullable: true }
+        refunds: { type: array, items: { $ref: "#/components/schemas/PurchaseRefund" } }
+    FreePurchase:
+      type: object
+      required: [id, description, currency, createdAt]
+      properties:
+        id: { type: string }
+        description: { type: string }
+        currency: { type: string }
+        createdAt: { type: string }
+    PurchaseHistory:
+      type: object
+      required: [customers, selectedCustomerId, transactions, freePurchases, hasMore, nextPaymentCursor, nextOrderCursor, livemode]
+      properties:
+        customers: { type: array, items: { $ref: "#/components/schemas/PurchaseUser" } }
+        selectedCustomerId: { type: string, nullable: true }
+        transactions: { type: array, items: { $ref: "#/components/schemas/PurchaseTransaction" } }
+        freePurchases: { type: array, items: { $ref: "#/components/schemas/FreePurchase" } }
+        hasMore: { type: boolean }
+        nextPaymentCursor: { type: string, nullable: true }
+        nextOrderCursor: { type: string, nullable: true }
+        livemode: { type: boolean }
+    PromotionInput:
+      type: object
+      required: [code, discountType, value, duration]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 50, pattern: "^[A-Za-z0-9-]+$" }
+        discountType: { type: string, enum: [percent, amount] }
+        value: { type: number, exclusiveMinimum: 0, maximum: 10000, description: Percent off, or USD dollars off. Up to two decimal places. }
+        duration: { type: string, enum: [once, forever] }
+        productId: { type: string, minLength: 1, maxLength: 100, description: Omit to apply to all purchases including Requests. }
+        maxRedemptions: { type: integer, minimum: 1, maximum: 1000000 }
+    Promotion:
+      type: object
+      required: [id, code, active, discountType, value, duration, productIds, timesRedeemed, maxRedemptions]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        active: { type: boolean }
+        discountType: { type: string, enum: [percent, amount] }
+        value: { type: number }
+        duration: { type: string }
+        productIds: { type: array, items: { type: string } }
+        timesRedeemed: { type: integer }
+        maxRedemptions: { type: integer, nullable: true }
+    PromotionCatalog:
+      type: object
+      required: [promotions, purchases]
+      properties:
+        promotions: { type: array, items: { $ref: "#/components/schemas/Promotion" } }
+        purchases:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromotionPurchase"
+    PromotionPurchase:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    CheckoutInput:
+      type: object
+      required: [priceId, name, email]
+      properties:
+        priceId: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email }
+        githubRepositoryStatus:
+          type: string
+          enum: [yes, no, unknown]
+          description: Whether the project runs on any GitHub repositories. Omit or use unknown if unsure.
+        githubRepositoryUrls:
+          type: array
+          maxItems: 100
+          items: { type: string, maxLength: 300 }
+          description: GitHub repository links. At least one nonblank link is required when the answer is yes.
+        payInFull:
+          type: boolean
+          description: Pay the whole plan upfront at the discounted one-time price
+    CheckoutSession:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
+    CheckoutSummary:
+      type: object
+      required: [status, planName, customerEmail, installments, installmentAmount, currency, interval, paidInFull, afterAmount, amountToday, discountAmount]
+      properties:
+        status:
+          type: string
+          enum: [complete, open, expired]
+        planName: { type: string }
+        customerEmail: { type: ["string", "null"] }
+        installments: { type: ["integer", "null"] }
+        installmentAmount: { type: integer }
+        amountToday: { type: integer, description: Checkout total in cents after any promo discount. }
+        discountAmount: { type: integer, description: Promo discount applied to this checkout in cents. }
+        currency: { type: string }
+        interval: { type: string }
+        paidInFull:
+          type: boolean
+          description: True when the plan was paid upfront in one payment (installmentAmount is then the total paid)
+        afterAmount:
+          type: ["integer", "null"]
+          description: Recurring hosting amount that starts after the plan term, if any
+    InquiryInput:
+      type: object
+      required: [name, email, service, message]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email }
+        company: { type: string, maxLength: 120 }
+        service:
+          type: string
+          enum: [design, hosting, bundle, other]
+        budget: { type: string, maxLength: 60 }
+        message: { type: string, minLength: 1, maxLength: 4000 }
+    Inquiry:
+      type: object
+      required: [id, name, email, service, message, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        company: { type: ["string", "null"] }
+        service: { type: string }
+        budget: { type: ["string", "null"] }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }

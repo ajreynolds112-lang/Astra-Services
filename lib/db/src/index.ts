@@ -1,0 +1,25 @@
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+import * as schema from "./schema";
+import { handleIdlePoolErrors } from "./poolErrors";
+
+const { Pool } = pg;
+
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    "DATABASE_URL must be set. Did you forget to provision a database?",
+  );
+}
+
+export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+handleIdlePoolErrors(pool, (error) => {
+  console.error(JSON.stringify({
+    level: "error",
+    event: "database_idle_connection_error",
+    ...error,
+  }));
+});
+export const db = drizzle(pool, { schema });
+
+export * from "./schema";
+export { handleIdlePoolErrors } from "./poolErrors";
